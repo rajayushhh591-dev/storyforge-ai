@@ -1,1 +1,109 @@
-
+<!DOCTYPE html><html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#10111a">
+<title>StoryForge AI</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#10111a;color:#f4f4fa;font-family:system-ui,Arial,sans-serif}
+.app{display:flex;height:100dvh}
+.sidebar{width:245px;background:#171823;padding:18px;display:flex;flex-direction:column;gap:12px}
+.logo{font-size:23px;font-weight:800;color:#b9a5ff;margin-bottom:10px}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer;border:1px solid #343548;background:#232435;color:#f4f4fa;border-radius:10px;padding:11px}
+button:hover{background:#34334b}
+.new{background:#7860df;border:0}
+#history{overflow:auto;display:flex;flex-direction:column;gap:7px}
+.old{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{padding:16px 22px;border-bottom:1px solid #292a39;font-weight:700}
+.content{flex:1;overflow:auto;padding:24px;max-width:850px;width:100%;margin:auto}
+.welcome{text-align:center;padding:35px 0}
+.welcome h1{font-size:34px;margin-bottom:8px}
+.muted{color:#a5a5bb;line-height:1.6}
+.settings{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0}
+select{background:#202131;color:white;border:1px solid #38394b;border-radius:9px;padding:9px;max-width:100%}
+.message{padding:15px;margin:14px 0;border-radius:14px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
+.user{background:#28263e}
+.ai{background:#191a26;border:1px solid #2b2c3d}
+.composer{padding:14px 20px 20px;border-top:1px solid #292a39}
+.composer-inner{max-width:850px;margin:auto}
+textarea{width:100%;resize:vertical;min-height:95px;max-height:240px;background:#202131;color:white;border:1px solid #3b3c50;border-radius:13px;padding:14px;outline:none}
+.actions{display:flex;justify-content:space-between;gap:8px;margin-top:9px;flex-wrap:wrap}
+#status{font-size:12px;color:#aaaabe;margin-top:8px}
+@media(max-width:650px){.sidebar{width:64px;padding:10px 6px;align-items:center}.logo{font-size:19px}.side-label{display:none}.sidebar button{padding:10px 5px;font-size:12px}.content{padding:15px}.welcome h1{font-size:28px}.top{padding:14px}.composer{padding:10px}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+<div class="logo">✦<span class="side-label"> StoryForge</span></div>
+<button class="new" onclick="newChat()">＋ <span class="side-label">New story</span></button>
+<div class="side-label muted">YOUR STORIES</div>
+<div id="history"></div>
+<div style="margin-top:auto;display:grid;gap:8px">
+<button onclick="exportChats()">⇩ <span class="side-label">Export chats</span></button>
+<button onclick="importChats()">⇧ <span class="side-label">Import chats</span></button>
+</div>
+</aside>
+<main class="main">
+<div class="top">StoryForge AI <span style="float:right;color:#aaaabe;font-size:12px">STORY STUDIO</span></div>
+<section class="content" id="content">
+<div class="welcome" id="welcome">
+<div style="font-size:42px">✧</div>
+<h1>Every great story starts here.</h1>
+<p class="muted">Apni imagination ko ek complete kahani mein badlo.</p>
+</div>
+<div class="settings">
+<select id="genre"><option>Fantasy</option><option>Mythology</option><option>Romance</option><option>Thriller</option><option>Horror</option><option>Science Fiction</option><option>Adventure</option><option>Historical</option><option>Drama</option></select>
+<select id="language"><option>Hindi</option><option>Hinglish</option><option>English</option></select>
+<select id="length"><option value="short">Short story</option><option value="medium" selected>Long story</option><option value="chapter">Detailed chapter</option></select>
+</div>
+<div id="messages"></div>
+</section>
+<div class="composer">
+<div class="composer-inner">
+<textarea id="prompt" placeholder="Apni story ka idea likho... Characters, plot, world ya next chapter ke instructions."></textarea>
+<div class="actions">
+<button onclick="addInstruction()">＋ Add instruction</button>
+<button class="new" onclick="sendStory()">Generate story ↗</button>
+</div>
+<div id="status">Your stories are saved on this device.</div>
+</div>
+</div>
+</main>
+</div>
+<script>
+let chats=JSON.parse(localStorage.getItem('storyforge_chats')||'[]');
+let active=-1;
+let extra='';
+function persist(){localStorage.setItem('storyforge_chats',JSON.stringify(chats));renderHistory()}
+function newChat(){active=-1;extra='';document.getElementById('messages').innerHTML='';document.getElementById('welcome').style.display='block';document.getElementById('prompt').value='';document.getElementById('status').textContent='New story ready.';renderHistory()}
+function renderHistory(){
+const box=document.getElementById('history');box.innerHTML='';
+chats.forEach((c,i)=>{let b=document.createElement('button');b.className='old';b.textContent=c.title||'Untitled story';b.onclick=()=>openChat(i);box.appendChild(b)})
+}
+function openChat(i){active=i;extra='';document.getElementById('welcome').style.display='none';document.getElementById('messages').innerHTML='';chats[i].messages.forEach(m=>addMessage(m.role,m.text));document.getElementById('status').textContent='Story opened.'}
+function addMessage(role,text){const d=document.createElement('div');d.className='message '+(role==='user'?'user':'ai');d.textContent=(role==='user'?'You\n':'StoryForge AI\n')+text;document.getElementById('messages').appendChild(d)}
+function addInstruction(){let x=prompt('Kaunsi extra instruction follow karni hai?');if(x){extra+=(extra?'\n':'')+x;document.getElementById('status').textContent='Extra instruction added.'}}
+async function sendStory(){
+const box=document.getElementById('prompt');const text=box.value.trim();if(!text)return;
+if(active<0){chats.unshift({title:text.slice(0,35),messages:[]});active=0}
+const chat=chats[active];chat.messages.push({role:'user',text});document.getElementById('welcome').style.display='none';addMessage('user',text);box.value='';persist();
+const replyBox=document.createElement('div');replyBox.className='message ai';replyBox.textContent='StoryForge AI\nWriting your story...';document.getElementById('messages').appendChild(replyBox);
+document.getElementById('status').textContent='Connecting to AI...';
+const instructions='Write a '+document.getElementById('length').value+' in '+document.getElementById('language').value+'. Genre: '+document.getElementById('genre').value+'. Maintain continuity with previous messages in this conversation. Follow these extra instructions: '+extra+'. User request: '+text;
+try{
+const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:chat.messages.map(m=>({role:m.role==='ai'?'assistant':'user',content:m.text})),instructions})});
+const data=await res.json();if(!res.ok)throw new Error(data.error||'Server error');
+const answer=data.reply||data.choices?.[0]?.message?.content;if(!answer)throw new Error('Empty AI response');
+replyBox.textContent='StoryForge AI\n'+answer;chat.messages.push({role:'ai',text:answer});extra='';persist();document.getElementById('status').textContent='Story generated and saved.';
+}catch(e){replyBox.textContent='Connection error\n'+e.message+'\n\nAI server abhi connect nahi hai. App ka interface ready hai; online AI ke liye backend deploy karna hoga.';document.getElementById('status').textContent='AI connection not configured.'}
+}
+function exportChats(){const blob=new Blob([JSON.stringify(chats,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='storyforge-backup.json';a.click();URL.revokeObjectURL(a.href)}
+function importChats(){const f=document.createElement('input');f.type='file';f.accept='.json,application/json';f.onchange=async()=>{try{const x=JSON.parse(await f.files[0].text());if(!Array.isArray(x))throw Error();chats=x;persist();newChat();alert('Chats imported!')}catch(e){alert('Invalid backup file')}};f.click()}
+renderHistory();
+</script>
+</body>
+</html>
