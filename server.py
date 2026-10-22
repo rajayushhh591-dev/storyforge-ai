@@ -5,6 +5,10 @@ from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__)
 
+GEMINI_MODEL = os.environ.get(
+    "GEMINI_MODEL", "gemini-2.5-flash"
+)
+
 
 @app.route("/")
 def home():
@@ -13,11 +17,11 @@ def home():
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
-    key = os.environ.get("OPENROUTER_API_KEY")
+    key = os.environ.get("GEMINI_API_KEY")
 
     if not key:
         return jsonify({
-            "error": "Server API key configure nahi hui hai."
+            "error": "GEMINI_API_KEY server secret configure nahi hai."
         }), 500
 
     data = request.get_json(silent=True) or {}
@@ -27,30 +31,51 @@ def chat():
     if not messages:
         return jsonify({"error": "Pehle story idea likho."}), 400
 
+    contents = []
+
+    for message in messages:
+        role = message.get("role", "user")
+        content = message.get("content", "")
+
+        if not content:
+            continue
+
+        contents.append({
+            "role": "model" if role == "assistant" else "user",
+            "parts": [{"text": str(content)}]
+        })
+
+    if not contents:
+        return jsonify({"error": "Story idea khaali hai."}), 400
+
     payload = {
-        "model": os.environ.get(
-            "OPENROUTER_MODEL",
-            "openai/gpt-4o-mini"
-        ),
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are StoryForge AI, a creative story writer. "
-                    "Write engaging, coherent stories and maintain "
-                    "continuity. Follow these instructions: "
+        "system_instruction": {
+            "parts": [{
+                "text": (
+                    "You are StoryForge AI, an expert creative "
+                    "story writer. Write engaging, detailed stories "
+                    "and maintain continuity. Follow these instructions: "
                     + instructions
                 )
-            }
-        ] + messages,
-        "temperature": 0.85
+            }]
+        },
+        "contents": contents,
+        "generationConfig": {
+            "temperature": 0.85,
+            "maxOutputTokens": 8192
+        }
     }
+
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        + GEMINI_MODEL + ":generateContent"
+    )
 
     try:
         response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            url,
             headers={
-                "Authorization": "Bearer " + key,
+                "x-goog-api-key": key,
                 "Content-Type": "application/json"
             },
             json=payload,
@@ -60,24 +85,38 @@ def chat():
         result = response.json()
 
         if response.status_code != 200:
-            error_data = result.get("error", {})
-            if isinstance(error_data, dict):
-                error_message = error_data.get(
-                    "message", "AI request failed."
-                )
-            else:
-                error_message = "AI request failed."
+            error = result.get("error", {})
+            message = error.get(
+                "message", "Gemini request failed."
+            ) if isinstance(error, dict) else "Gemini request failed."
 
-            return jsonify({"error": error_message}), 502
+            return jsonify({"error": message}), 502
 
-        reply = result["choices"][0]["message"]["content"]
+        candidates = result.get("candidates", [])
+
+        if not candidates:
+            return jsonify({
+                "error": "Gemini ne story response nahi diya."
+            }), 502
+
+        parts = candidates[0].get("content", {}).get("parts", [])
+        reply = "\n".join(
+            part.get("text", "")
+            for part in parts
+            if part.get("text")
+        )
+
+        if not reply:
+            return jsonify({
+                "error": "Gemini ka response khaali tha."
+            }), 502
 
         return jsonify({"reply": reply})
 
-    except Exception:
-        app.logger.exception("AI request failed")
+    except requests.RequestException:
+        app.logger.exception("Gemini connection failed")
         return jsonify({
-            "error": "AI server se connection nahi ho paya."
+            "error": "Gemini server se connection nahi ho paya."
         }), 502
 
 
